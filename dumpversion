@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+
+import tarfile,os
+import sys
+import struct
+
+def main():
+    if len(sys.argv) != 2:
+        program = sys.argv[0]
+        print(f"""{program} - Read the store version of a Neo4j dumpfile
+
+Usage:
+
+  {program} PATH_TO_DUMP
+""")
+        return
+
+    dumpfile = sys.argv[1]
+
+    # Records in neostore look like:
+    #  0                   1                   2                   3
+    #  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    # |   Reserved  |I|                     Value                     |
+    # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    # |                          Value Cont.                          |
+    # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    # |  Value Cont.  |
+    # +-+-+-+-+-+-+-+-+
+    record_size = 9
+
+    # The store version is in record at index 4, the record contains a string
+    # with the length - up to 7 bytes - at the end:
+    #  0                   1                   2                   3
+    #  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    # |   Reserved  |I|                 Version String                |
+    # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    # |                         Version Cont.                         |
+    # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    # |  Version Len. |
+    # +-+-+-+-+-+-+-+-+
+    store_version_record = 4
+
+    with tarfile.open(dumpfile) as dump:
+        for member in dump.getmembers():
+            if not member.path == "./neostore":
+                continue
+            f = dump.extractfile(member)
+
+            # Skip to our record
+            f.read(store_version_record * record_size + 1)
+
+            # Read the store version
+            record = f.read(8)
+            print(record[7-record[-1]:-1][::-1].decode("UTF-8")) # lol
+            return
+
+if __name__ == "__main__":
+    main()
